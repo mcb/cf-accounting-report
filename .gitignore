@@ -10,3 +10,8 @@
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+*.linux32
+*.linux64
+*.win32
+*.win64
+*.osx
