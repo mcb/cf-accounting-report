@@ -42,6 +42,22 @@ type service struct {
   Hours     float32   `json:"duration_in_hours"`
 }
 
+type servicePlan struct {
+  Name    string      `json:"service_name"`
+  Usage   []service   `json:"usages"`
+}
+
+
+// Why oh why does it have a different format than the service Plans?!?
+type servicePlanYearly struct {
+  Name      string    `json:"service_name"`
+  Year      int       `json:"year"`
+  Month     int       `json:"month"`
+  Average   float32   `json:"average_instances"`
+  Maximum   float32   `json:"maximum_instances"`
+  Hours     float32   `json:"duration_in_hours"`
+}
+
 func (c *accountingReport) GetAppUsage(client *apiClient, out io.Writer, outputJSON bool) error {
 
   var appReport struct {
@@ -71,6 +87,46 @@ func (c *accountingReport) GetAppUsage(client *apiClient, out io.Writer, outputJ
   for _, monthly := range appReport.Monthly {
     table.Append([]string{"AI", fmt.Sprint(monthly.Year), fmt.Sprint(monthly.Month), fmt.Sprint(monthly.Average), fmt.Sprint(monthly.Maximum), fmt.Sprint(monthly.Hours)})
   }
+  table.SetCaption(true, "Report Date: "+appReport.ReportTime)
+  table.Render()
+
+  return nil
+}
+
+// Retrieves Services Usage and prints it into table or json
+
+func (c *accountingReport) GetServiceUsage(client *apiClient, out io.Writer, outputJSON bool) error {
+
+  var serviceReport struct {
+      ReportTime  string                `json:"report_time"`
+      Monthly     []servicePlan         `json:"monthly_service_reports"`
+      Yearly      []servicePlanYearly   `json:"yearly_service_report"`
+    }
+
+  err := client.Get("/system_report/service_usages", &serviceReport)
+  
+  if err != nil {
+    return err
+  }
+
+  if outputJSON {
+    return json.NewEncoder(out).Encode(serviceReport)
+  }
+
+  table := tablewriter.NewWriter(out)
+  table.SetRowLine(true)
+  table.SetHeader([]string{"Type", "Name", "Year", "Month", "Average", "Maximum", "Hours"})
+
+  for _, monthly := range serviceReport.Monthly {
+    var name = monthly.Name
+    for _, usage := range monthly.Usage {
+      table.Append([]string{"Service", name, fmt.Sprint(usage.Year), fmt.Sprint(usage.Month), fmt.Sprint(usage.Average), fmt.Sprint(usage.Maximum), fmt.Sprint(usage.Hours)})
+    }
+  }
+  for _, yearly := range serviceReport.Yearly {
+    table.Append([]string{"Service", yearly.Name, fmt.Sprint(yearly.Year), "all", fmt.Sprint(yearly.Average), fmt.Sprint(yearly.Maximum), fmt.Sprint(yearly.Hours)})
+  }
+  table.SetCaption(true, "Report Date: "+serviceReport.ReportTime)
   table.Render()
 
   return nil
@@ -122,9 +178,14 @@ func newApiClient(cliConnection plugin.CliConnection) (*apiClient, error) {
 // plugin interface defined by the core CLI.
 func (c *accountingReport) Run(cliConnection plugin.CliConnection, args []string) {
   outputJSON := false
+  applications := true
+  services := false
 
   fs := flag.NewFlagSet("accounting-report", flag.ExitOnError)
   fs.BoolVar(&outputJSON, "output-json", false, "if set sends JSON to stdout instead of table rendering")
+  fs.BoolVar(&applications, "applications", false, "if set only prints applications data")
+  fs.BoolVar(&services, "services", false, "if set only prints services data")
+
   err := fs.Parse(args[1:])
   if err != nil {
     log.Fatal(err)
@@ -137,7 +198,13 @@ func (c *accountingReport) Run(cliConnection plugin.CliConnection, args []string
 
   switch args[0] {
     case "accounting-report":
-    err := c.GetAppUsage(client, os.Stdout, outputJSON)
+    var err error
+    if services {
+      err = c.GetServiceUsage(client, os.Stdout, outputJSON)
+    } else {
+      err = c.GetAppUsage(client, os.Stdout, outputJSON)
+    }
+
     if err != nil {
       log.Fatal(err)
     }
@@ -152,7 +219,7 @@ func (c *accountingReport) GetMetadata() plugin.PluginMetadata {
     Version: plugin.VersionType{
       Major: 0,
       Minor: 0,
-      Build: 1,
+      Build: 2,
     },
     MinCliVersion: plugin.VersionType{
       Major: 6,
@@ -162,7 +229,7 @@ func (c *accountingReport) GetMetadata() plugin.PluginMetadata {
     Commands: []plugin.Command{
       {
         Name:     "accounting-report",
-        HelpText: "lists usage data of purchased resources",
+        HelpText: "lists usage data of purchased resources with applications being default",
 
         // UsageDetails is optional
         // It is used to show help of usage of each command
@@ -170,7 +237,8 @@ func (c *accountingReport) GetMetadata() plugin.PluginMetadata {
           Usage: "cf accounting-report",
           Options: map[string]string{
             "output-json": "if set prints JSON to stdout instead of a rendered table",
-            "type":        "if set only prints set type (not implemented yet)",
+            "applications": "if set only prints applications data",
+            "services": "if set only prints services data",
           },
         },
       },
