@@ -13,7 +13,7 @@ Download Urls can be found on the [releases page](https://github.com/mcb/cf-acco
 
 ## Usage
 
-```bash
+```
 % cf accounting-report
 +------+------+-------+-----------+---------+----------+
 | TYPE | YEAR | MONTH |  AVERAGE  | MAXIMUM |  HOURS   |
@@ -27,7 +27,7 @@ Report Date: 2018-08-31 14:47:17 UTC
 
 This will list usage data for all application instances, service instances can be displayed using the ```--services``` switch
 
-```bash
+```
 % cf accounting-report --services
 +---------+----------------+------+-------+---------+---------+------------+
 |  TYPE   |      NAME      | YEAR | MONTH | AVERAGE | MAXIMUM |   HOURS    |
